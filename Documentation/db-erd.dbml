@@ -1,0 +1,96 @@
+// Users table
+Table users {
+  id serial [pk]
+  auth_id uuid
+  first_name varchar [not null]
+  last_name varchar [not null]
+  phone varchar [unique, not null, note: 'WhatsApp number']
+  email varchar
+  created_at timestamp [default: 'now()']
+  updated_at timestamp [default: 'now()']
+}
+
+// Psychologists table
+Table psychologists {
+  id serial [pk]
+  auth_id uuid
+  first_name varchar [not null]
+  last_name varchar [not null]
+  phone varchar [unique]
+  email varchar [not null, unique]
+  bio text
+  is_active boolean [not null, default: true]
+  created_at timestamp [default: 'now()']
+  updated_at timestamp [default: 'now()']
+}
+
+// Appointments table
+Table appointments {
+  id serial [pk]
+  user_id integer [not null]
+  psychologist_id integer [not null]
+  appointment_date date [not null]
+  start_time time [not null]
+  end_time time [not null]
+  status varchar(20) [not null, default: 'scheduled', note: 'scheduled, confirmed, cancelled, completed']
+  notes text
+  entry_method varchar(20) [not null, note: 'click_to_chat or web_form']
+  created_at timestamp [default: 'now()']
+  updated_at timestamp [default: 'now()']
+}
+
+// Availability
+Table availability{
+  id serial [pk]
+  psychologist_id integer [not null]
+  day_of_week integer [not null]
+  start_time time [not null]
+  end_time time [not null]
+  is_active boolean [not null]
+  created_at timestamp [default: 'now()']
+  updated_at timestamp [default: 'now()']
+
+}
+
+//Metrics
+Table metrics{
+  id serial [pk]
+  user_id integer
+  entry_method varchar(20) [not null]
+  event_type varchar(50) [not null]
+  event_timestamp timestamp [not null, default: 'now()']
+  appointment_id integer 
+  session_id varchar(100) [not null]
+  time_taken integer
+  additional_data JSONB
+}
+
+// Chat Sessions
+Table chat_sessions {
+  id serial [pk]
+  user_id integer
+  whatsapp_id varchar(100) [not null]
+  session_start timestamp [default: 'now()']
+  session_end timestamp
+  status varchar(20) [not null, default: 'active', note: 'active, completed, abandoned']
+  entry_method varchar(20) [not null, note: 'click_to_chat or web_form']
+  appointment_id integer
+}
+
+// Session States
+Table session_states {
+  id serial [pk]
+  chat_session_id integer [not null]
+  current_step varchar(50) [not null, note: 'welcome, date_selection, time_selection, etc.']
+  context JSONB [not null, default: '{}', note: 'Stores conversation context']
+  last_updated timestamp [default: 'now()']
+}
+
+Ref: appointments.user_id > users.id [delete: cascade]
+Ref: appointments.psychologist_id > psychologists.id [delete: cascade]
+Ref: availability.psychologist_id > psychologists.id [delete:cascade]
+Ref: metrics.user_id > users.id
+Ref: metrics.appointment_id > appointments.id [delete: set null]
+Ref: chat_sessions.user_id > users.id [delete: set null]
+Ref: chat_sessions.appointment_id > appointments.id [delete: set null]
+Ref: session_states.chat_session_id > chat_sessions.id [delete: cascade]

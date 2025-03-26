@@ -12,6 +12,9 @@
 | `chat_sessions` | Monitors WhatsApp conversation lifecycles |
 | `session_states` | Manages conversation flow state for the WhatsApp bot |
 
+This is the Entity Relationship Diagram for the Database\
+![Descriptive Text](./Documentation/DB-ERD.png)
+
 ## Table Definitions
 
 ### users
@@ -69,25 +72,24 @@ ON psychologists FOR SELECT USING (is_active = TRUE);
 ### availability
 Defines when psychologists are available for appointments.
 ```sql
-CREATE TABLE psychologists (
+CREATE TABLE availability (
     id SERIAL PRIMARY KEY,
-    auth_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-    first_name VARCHAR(100) NOT NULL,
-    last_name VARCHAR(100) NOT NULL,
-    phone VARCHAR(20) UNIQUE,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    bio TEXT,
+    psychologist_id INTEGER NOT NULL REFERENCES psychologists(id) ON DELETE CASCADE,
+    day_of_week INTEGER NOT NULL, -- 0-6 (Sunday-Saturday)
+    start_time TIME NOT NULL,
+    end_time TIME NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    CONSTRAINT valid_time_range CHECK (start_time < end_time)
 );
 
--- RLS policies will limit write access to admins only
-ALTER TABLE psychologists ENABLE ROW LEVEL SECURITY;
+-- RLS for availability
+ALTER TABLE availability ENABLE ROW LEVEL SECURITY;
 
--- Policy: Everyone can see active psychologists
-CREATE POLICY "Anyone can view active psychologists" 
-ON psychologists FOR SELECT USING (is_active = TRUE);
+-- Policy: All users can read availability
+CREATE POLICY "Anyone can see availability" 
+ON availability FOR SELECT USING (TRUE);
 ```
 
 ### appointments
