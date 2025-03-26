@@ -1,7 +1,6 @@
 // Users table
 Table users {
   id serial [pk]
-  auth_id uuid
   first_name varchar [not null]
   last_name varchar [not null]
   phone varchar [unique, not null, note: 'WhatsApp number']

@@ -13,7 +13,7 @@
 | `session_states` | Manages conversation flow state for the WhatsApp bot |
 
 This is the Entity Relationship Diagram for the Database\
-![Descriptive Text](./Documentation/DB-ERD.png)
+![Descriptive Text](Documentation/DB-ERD.png)
 
 ## Table Definitions
 
@@ -42,6 +42,17 @@ ON users FOR SELECT USING (auth.uid() = auth_id);
 
 CREATE POLICY "Users can update their own data" 
 ON users FOR UPDATE USING (auth.uid() = auth_id);
+
+-- NEW POLICIES
+CREATE POLICY "Users can insert their own data" 
+ON users FOR INSERT WITH CHECK (auth.uid() = auth_id);
+
+CREATE POLICY "Users cannot delete their accounts" 
+ON users FOR DELETE USING (false);
+
+-- Admin policy for user management (will need to be applied to all tables)
+CREATE POLICY "Admins can manage all user data" 
+ON users USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### psychologists
@@ -67,6 +78,19 @@ ALTER TABLE psychologists ENABLE ROW LEVEL SECURITY;
 -- Policy: Everyone can see active psychologists
 CREATE POLICY "Anyone can view active psychologists" 
 ON psychologists FOR SELECT USING (is_active = TRUE);
+
+-- NEW POLICIES
+CREATE POLICY "Psychologists can update their own profile" 
+ON psychologists FOR UPDATE 
+USING (auth.uid() = auth_id);
+
+CREATE POLICY "Only admins can create psychologist accounts" 
+ON psychologists FOR INSERT
+WITH CHECK (auth.jwt() ->> 'role' = 'admin');
+
+CREATE POLICY "Only admins can delete psychologist accounts" 
+ON psychologists FOR DELETE
+USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### availability
@@ -90,6 +114,35 @@ ALTER TABLE availability ENABLE ROW LEVEL SECURITY;
 -- Policy: All users can read availability
 CREATE POLICY "Anyone can see availability" 
 ON availability FOR SELECT USING (TRUE);
+
+-- NEW POLICIES
+CREATE POLICY "Psychologists can manage their own availability" 
+ON availability FOR INSERT
+WITH CHECK (
+    auth.uid() IN (
+        SELECT auth_id FROM psychologists WHERE id = availability.psychologist_id
+    )
+);
+
+CREATE POLICY "Psychologists can update their own availability" 
+ON availability FOR UPDATE
+USING (
+    auth.uid() IN (
+        SELECT auth_id FROM psychologists WHERE id = availability.psychologist_id
+    )
+);
+
+CREATE POLICY "Psychologists can delete their own availability" 
+ON availability FOR DELETE
+USING (
+    auth.uid() IN (
+        SELECT auth_id FROM psychologists WHERE id = availability.psychologist_id
+    )
+);
+
+CREATE POLICY "Admins can manage all availability" 
+ON availability 
+USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### appointments
@@ -131,6 +184,42 @@ USING (
     )
 );
 
+-- NEW POLICIES
+CREATE POLICY "Users can create their own appointments" 
+ON appointments FOR INSERT
+WITH CHECK (
+    auth.uid() IN (
+        SELECT auth_id FROM users WHERE id = appointments.user_id
+    )
+);
+
+CREATE POLICY "Users can update their own appointments" 
+ON appointments FOR UPDATE
+USING (
+    auth.uid() IN (
+        SELECT auth_id FROM users WHERE id = appointments.user_id
+    )
+);
+
+CREATE POLICY "Psychologists can update their appointments" 
+ON appointments FOR UPDATE
+USING (
+    auth.uid() IN (
+        SELECT auth_id FROM psychologists WHERE id = appointments.psychologist_id
+    )
+);
+
+CREATE POLICY "Users can cancel their own appointments" 
+ON appointments FOR DELETE
+USING (
+    auth.uid() IN (
+        SELECT auth_id FROM users WHERE id = appointments.user_id
+    )
+);
+
+CREATE POLICY "Admins can manage all appointments" 
+ON appointments 
+USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### metrics
@@ -147,6 +236,25 @@ CREATE TABLE metrics (
     time_taken INTEGER,
     additional_data JSONB
 );
+
+-- NEW POLICIES
+ALTER TABLE metrics ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "System services can insert metrics" 
+ON metrics FOR INSERT
+WITH CHECK (auth.jwt() ->> 'role' = 'service');
+
+CREATE POLICY "Admins can view all metrics" 
+ON metrics FOR SELECT
+USING (auth.jwt() ->> 'role' = 'admin');
+
+CREATE POLICY "No one can update metrics" 
+ON metrics FOR UPDATE
+USING (false);
+
+CREATE POLICY "Only admins can delete metrics" 
+ON metrics FOR DELETE
+USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### chat_sessions
@@ -165,6 +273,23 @@ CREATE TABLE chat_sessions (
 
 -- RLS for chat sessions
 ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
+
+-- NEW POLICIES
+CREATE POLICY "Users can see their own chat sessions" 
+ON chat_sessions FOR SELECT
+USING (
+    auth.uid() IN (
+        SELECT auth_id FROM users WHERE id = chat_sessions.user_id
+    )
+);
+
+CREATE POLICY "Whatsapp service can manage chat sessions" 
+ON chat_sessions
+USING (auth.jwt() ->> 'role' = 'whatsapp_service');
+
+CREATE POLICY "Admins can manage all chat sessions" 
+ON chat_sessions
+USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### session_states
@@ -180,6 +305,15 @@ CREATE TABLE session_states (
 
 -- RLS for session states
 ALTER TABLE session_states ENABLE ROW LEVEL SECURITY;
+
+-- NEW POLICIES
+CREATE POLICY "Whatsapp service can manage session states" 
+ON session_states
+USING (auth.jwt() ->> 'role' = 'whatsapp_service');
+
+CREATE POLICY "Admins can view all session states" 
+ON session_states FOR SELECT
+USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 #### Functions for Automatic Timestamp Updates
@@ -224,5 +358,3 @@ CREATE INDEX idx_metrics_entry_method ON metrics(entry_method);
 CREATE INDEX idx_metrics_event_type ON metrics(event_type);
 CREATE INDEX idx_chat_sessions_whatsapp ON chat_sessions(whatsapp_id);
 ```
-
-
