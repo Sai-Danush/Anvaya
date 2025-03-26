@@ -13,7 +13,7 @@
 | `session_states` | Manages conversation flow state for the WhatsApp bot |
 
 This is the Entity Relationship Diagram for the Database\
-![Descriptive Text](Documentation/DB-ERD.png)
+![Entity Relationship Diagram](/Documentation/DB-ERD.png)
 
 ## Table Definitions
 
@@ -24,7 +24,6 @@ Phone number is UNIQUE as it's their primary identifier through WhatsApp
 ```sql
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    auth_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     phone VARCHAR(20) UNIQUE NOT NULL,  -- WhatsApp number
@@ -32,27 +31,6 @@ CREATE TABLE users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
--- Set up RLS (Row Level Security) for users table
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-
--- Policy: Users can only read/write their own data
-CREATE POLICY "Users can see their own data" 
-ON users FOR SELECT USING (auth.uid() = auth_id);
-
-CREATE POLICY "Users can update their own data" 
-ON users FOR UPDATE USING (auth.uid() = auth_id);
-
--- NEW POLICIES
-CREATE POLICY "Users can insert their own data" 
-ON users FOR INSERT WITH CHECK (auth.uid() = auth_id);
-
-CREATE POLICY "Users cannot delete their accounts" 
-ON users FOR DELETE USING (false);
-
--- Admin policy for user management (will need to be applied to all tables)
-CREATE POLICY "Admins can manage all user data" 
-ON users USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### psychologists
@@ -61,7 +39,6 @@ Contains data for the psychologist(s) offering appointments.
 ```sql
 CREATE TABLE psychologists (
     id SERIAL PRIMARY KEY,
-    auth_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     first_name VARCHAR(100) NOT NULL,
     last_name VARCHAR(100) NOT NULL,
     phone VARCHAR(20) UNIQUE,
@@ -71,26 +48,6 @@ CREATE TABLE psychologists (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
--- RLS policies will limit write access to admins only
-ALTER TABLE psychologists ENABLE ROW LEVEL SECURITY;
-
--- Policy: Everyone can see active psychologists
-CREATE POLICY "Anyone can view active psychologists" 
-ON psychologists FOR SELECT USING (is_active = TRUE);
-
--- NEW POLICIES
-CREATE POLICY "Psychologists can update their own profile" 
-ON psychologists FOR UPDATE 
-USING (auth.uid() = auth_id);
-
-CREATE POLICY "Only admins can create psychologist accounts" 
-ON psychologists FOR INSERT
-WITH CHECK (auth.jwt() ->> 'role' = 'admin');
-
-CREATE POLICY "Only admins can delete psychologist accounts" 
-ON psychologists FOR DELETE
-USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### availability
@@ -107,42 +64,6 @@ CREATE TABLE availability (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     CONSTRAINT valid_time_range CHECK (start_time < end_time)
 );
-
--- RLS for availability
-ALTER TABLE availability ENABLE ROW LEVEL SECURITY;
-
--- Policy: All users can read availability
-CREATE POLICY "Anyone can see availability" 
-ON availability FOR SELECT USING (TRUE);
-
--- NEW POLICIES
-CREATE POLICY "Psychologists can manage their own availability" 
-ON availability FOR INSERT
-WITH CHECK (
-    auth.uid() IN (
-        SELECT auth_id FROM psychologists WHERE id = availability.psychologist_id
-    )
-);
-
-CREATE POLICY "Psychologists can update their own availability" 
-ON availability FOR UPDATE
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM psychologists WHERE id = availability.psychologist_id
-    )
-);
-
-CREATE POLICY "Psychologists can delete their own availability" 
-ON availability FOR DELETE
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM psychologists WHERE id = availability.psychologist_id
-    )
-);
-
-CREATE POLICY "Admins can manage all availability" 
-ON availability 
-USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### appointments
@@ -162,64 +83,6 @@ CREATE TABLE appointments (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
     CONSTRAINT valid_appointment_time CHECK (start_time < end_time)
 );
-
--- RLS for appointments
-ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
-
--- Policy: Users can only see their own appointments
-CREATE POLICY "Users can see their own appointments" 
-ON appointments FOR SELECT 
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM users WHERE id = appointments.user_id
-    )
-);
-
--- Policy: Psychologists can see appointments assigned to them
-CREATE POLICY "Psychologists can see their appointments" 
-ON appointments FOR SELECT 
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM psychologists WHERE id = appointments.psychologist_id
-    )
-);
-
--- NEW POLICIES
-CREATE POLICY "Users can create their own appointments" 
-ON appointments FOR INSERT
-WITH CHECK (
-    auth.uid() IN (
-        SELECT auth_id FROM users WHERE id = appointments.user_id
-    )
-);
-
-CREATE POLICY "Users can update their own appointments" 
-ON appointments FOR UPDATE
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM users WHERE id = appointments.user_id
-    )
-);
-
-CREATE POLICY "Psychologists can update their appointments" 
-ON appointments FOR UPDATE
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM psychologists WHERE id = appointments.psychologist_id
-    )
-);
-
-CREATE POLICY "Users can cancel their own appointments" 
-ON appointments FOR DELETE
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM users WHERE id = appointments.user_id
-    )
-);
-
-CREATE POLICY "Admins can manage all appointments" 
-ON appointments 
-USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### metrics
@@ -236,25 +99,6 @@ CREATE TABLE metrics (
     time_taken INTEGER,
     additional_data JSONB
 );
-
--- NEW POLICIES
-ALTER TABLE metrics ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "System services can insert metrics" 
-ON metrics FOR INSERT
-WITH CHECK (auth.jwt() ->> 'role' = 'service');
-
-CREATE POLICY "Admins can view all metrics" 
-ON metrics FOR SELECT
-USING (auth.jwt() ->> 'role' = 'admin');
-
-CREATE POLICY "No one can update metrics" 
-ON metrics FOR UPDATE
-USING (false);
-
-CREATE POLICY "Only admins can delete metrics" 
-ON metrics FOR DELETE
-USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### chat_sessions
@@ -270,26 +114,6 @@ CREATE TABLE chat_sessions (
     entry_method VARCHAR(20) NOT NULL, -- 'click_to_chat' or 'web_form'
     appointment_id INTEGER REFERENCES appointments(id) ON DELETE SET NULL
 );
-
--- RLS for chat sessions
-ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
-
--- NEW POLICIES
-CREATE POLICY "Users can see their own chat sessions" 
-ON chat_sessions FOR SELECT
-USING (
-    auth.uid() IN (
-        SELECT auth_id FROM users WHERE id = chat_sessions.user_id
-    )
-);
-
-CREATE POLICY "Whatsapp service can manage chat sessions" 
-ON chat_sessions
-USING (auth.jwt() ->> 'role' = 'whatsapp_service');
-
-CREATE POLICY "Admins can manage all chat sessions" 
-ON chat_sessions
-USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 ### session_states
@@ -302,18 +126,6 @@ CREATE TABLE session_states (
     context JSONB NOT NULL DEFAULT '{}', -- Stores conversation context
     last_updated TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
-
--- RLS for session states
-ALTER TABLE session_states ENABLE ROW LEVEL SECURITY;
-
--- NEW POLICIES
-CREATE POLICY "Whatsapp service can manage session states" 
-ON session_states
-USING (auth.jwt() ->> 'role' = 'whatsapp_service');
-
-CREATE POLICY "Admins can view all session states" 
-ON session_states FOR SELECT
-USING (auth.jwt() ->> 'role' = 'admin');
 ```
 
 #### Functions for Automatic Timestamp Updates
@@ -348,7 +160,7 @@ BEFORE UPDATE ON appointments
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 ```
 
-#### Indexes to optimie queries
+#### Indexes to optimize queries
 
 ```sql
 CREATE INDEX idx_appointments_date ON appointments(appointment_date);
@@ -357,4 +169,173 @@ CREATE INDEX idx_appointments_status ON appointments(status);
 CREATE INDEX idx_metrics_entry_method ON metrics(entry_method);
 CREATE INDEX idx_metrics_event_type ON metrics(event_type);
 CREATE INDEX idx_chat_sessions_whatsapp ON chat_sessions(whatsapp_id);
+```
+
+## Row Level Security (RLS) Implementation
+
+Note: These RLS policies should be implemented after the core functionality is working. During development, you can work without these restrictions to simplify testing and debugging.
+
+### Service Role Implementation Note
+
+This system uses a WhatsApp-based architecture where users primarily interact through messaging rather than direct web authentication. The backend services (Node-RED for WhatsApp integration and Go backend for business logic) will access Supabase using a service role.
+
+To implement this:
+1. Create a service role API key in Supabase dashboard (Settings > API)
+2. Use this key in your Node-RED flows and Go backend services
+3. Store this key securely as an environment variable, never in code
+4. The service role bypasses RLS, so your backend can perform all necessary operations
+
+### RLS Policies
+
+Apply these policies after your core implementation is complete and working:
+
+#### Users Table RLS
+
+```sql
+-- Enable RLS
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+
+-- Service role policy (for WhatsApp integration via Node-RED and Go backend)
+CREATE POLICY "Service role can manage all user data" 
+ON users 
+USING (auth.role() = 'service_role');
+
+-- Admin policy (for web dashboard access)
+CREATE POLICY "Admins can manage all user data" 
+ON users 
+USING (auth.jwt() ->> 'role' = 'admin');
+```
+
+#### Psychologists Table RLS
+
+```sql
+-- Enable RLS
+ALTER TABLE psychologists ENABLE ROW LEVEL SECURITY;
+
+-- Service role policy
+CREATE POLICY "Service role can manage psychologist data" 
+ON psychologists 
+USING (auth.role() = 'service_role');
+
+-- Admin policy
+CREATE POLICY "Admins can manage all psychologist data" 
+ON psychologists 
+USING (auth.jwt() ->> 'role' = 'admin');
+
+-- Policy for psychologists to view their own data (for web dashboard)
+CREATE POLICY "Psychologists can view their own data" 
+ON psychologists FOR SELECT 
+USING (auth.jwt() ->> 'psychologist_id'::text = id::text);
+
+-- Policy for psychologists to update their own data (for web dashboard)
+CREATE POLICY "Psychologists can update their own data" 
+ON psychologists FOR UPDATE 
+USING (auth.jwt() ->> 'psychologist_id'::text = id::text);
+```
+
+#### Availability Table RLS
+
+```sql
+-- Enable RLS
+ALTER TABLE availability ENABLE ROW LEVEL SECURITY;
+
+-- Service role policy
+CREATE POLICY "Service role can manage availability" 
+ON availability 
+USING (auth.role() = 'service_role');
+
+-- Admin policy
+CREATE POLICY "Admins can manage all availability" 
+ON availability 
+USING (auth.jwt() ->> 'role' = 'admin');
+
+-- Policy for psychologists to manage their own availability (for web dashboard)
+CREATE POLICY "Psychologists can manage their own availability" 
+ON availability
+USING (
+  auth.jwt() ->> 'psychologist_id'::text = psychologist_id::text
+);
+
+-- Public read policy (allow anyone to view active availability)
+CREATE POLICY "Anyone can view active availability" 
+ON availability FOR SELECT 
+USING (is_active = TRUE);
+```
+
+#### Appointments Table RLS
+
+```sql
+-- Enable RLS
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+
+-- Service role policy
+CREATE POLICY "Service role can manage appointments" 
+ON appointments 
+USING (auth.role() = 'service_role');
+
+-- Admin policy
+CREATE POLICY "Admins can manage all appointments" 
+ON appointments 
+USING (auth.jwt() ->> 'role' = 'admin');
+
+-- Policy for psychologists to view their own appointments (for web dashboard)
+CREATE POLICY "Psychologists can view their appointments" 
+ON appointments FOR SELECT 
+USING (auth.jwt() ->> 'psychologist_id'::text = psychologist_id::text);
+
+-- Policy for psychologists to update their appointments (for web dashboard)
+CREATE POLICY "Psychologists can update their appointments" 
+ON appointments FOR UPDATE
+USING (auth.jwt() ->> 'psychologist_id'::text = psychologist_id::text);
+```
+
+#### Metrics Table RLS
+
+```sql
+-- Enable RLS
+ALTER TABLE metrics ENABLE ROW LEVEL SECURITY;
+
+-- Service role policy
+CREATE POLICY "Service role can manage metrics" 
+ON metrics 
+USING (auth.role() = 'service_role');
+
+-- Admin policy
+CREATE POLICY "Admins can view all metrics" 
+ON metrics FOR SELECT
+USING (auth.jwt() ->> 'role' = 'admin');
+```
+
+#### Chat Sessions Table RLS
+
+```sql
+-- Enable RLS
+ALTER TABLE chat_sessions ENABLE ROW LEVEL SECURITY;
+
+-- Service role policy
+CREATE POLICY "Service role can manage chat sessions" 
+ON chat_sessions 
+USING (auth.role() = 'service_role');
+
+-- Admin policy
+CREATE POLICY "Admins can view all chat sessions" 
+ON chat_sessions FOR SELECT
+USING (auth.jwt() ->> 'role' = 'admin');
+```
+
+#### Session States Table RLS
+
+```sql
+-- Enable RLS
+ALTER TABLE session_states ENABLE ROW LEVEL SECURITY;
+
+-- Service role policy
+CREATE POLICY "Service role can manage session states" 
+ON session_states 
+USING (auth.role() = 'service_role');
+
+-- Admin policy
+CREATE POLICY "Admins can view all session states" 
+ON session_states FOR SELECT
+USING (auth.jwt() ->> 'role' = 'admin');
 ```
