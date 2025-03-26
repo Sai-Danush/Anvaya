@@ -19,16 +19,12 @@ Psychologist → React Dashboard → Go Backend → Supabase
 ### Phase 1: Database Setup
 - **Objective**: Implement database schema in Supabase
 - **Tasks**:
-  - Set up Supabase project
-  - Create tables following defined schema (users, psychologists, availability, appointments, etc.)
-  - Configure authentication for both patient and psychologist roles
+  - ~~Set up Supabase project~~
+  - ~~Create tables following defined schema (users, psychologists, availability, appointments, etc.)~~
+  - ~~Configure authentication for both patient and psychologist roles~~
   - Implement row-level security policies
-  - Create necessary indexes for query optimization
-  - Test database relationships with sample data
-- **Key Considerations**:
-  - Ensure proper user role separation
-  - Set up proper constraints for appointment scheduling
-  - Configure automatic timestamp updates
+  - ~~Create necessary indexes for query optimization~~
+  - ~~Test database relationships with sample data~~
 
 ### Phase 2: Go Backend Development
 - **Objective**: Create robust API services for both interfaces
@@ -40,10 +36,6 @@ Psychologist → React Dashboard → Go Backend → Supabase
   - Develop conflict resolution for scheduling
   - Create business logic for scheduling constraints
   - Implement notification services
-- **Key Considerations**:
-  - API security and authentication
-  - Error handling and logging
-  - Performance optimization for database queries
 
 ### Phase 3: WhatsApp Integration with Node-RED
 - **Objective**: Create conversational booking flow for patients
