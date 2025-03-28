@@ -4,7 +4,7 @@
 
 ### Option A: Click to Chat Approach [Alpha]
 ```
-User → wa.me → WhatsApp → Node-RED → Go Backend → Supabase
+User → wa.me → WhatsApp → Node-RED → Go Backend → PostgreSQL
 ```
 
 #### Advantages
@@ -20,7 +20,7 @@ User → wa.me → WhatsApp → Node-RED → Go Backend → Supabase
 
 ### Option B: Web Form Approach [Beta]
 ```
-User → React Form → Pre-filled WhatsApp message → WhatsApp → Node-RED → Go Backend → Supabase
+User → React Form → Pre-filled WhatsApp message → WhatsApp → Node-RED → Go Backend → PostgreSQL
 ```
 
 #### Advantages

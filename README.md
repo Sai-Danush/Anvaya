@@ -17,14 +17,15 @@ Psychologist → React Dashboard → Go Backend → Supabase
 ## Implementation Phases
 
 ### Phase 1: Database Setup
-- **Objective**: Implement database schema in Supabase
+- **Objective**: Implement database schema in PostgreSQL
 - **Tasks**:
-  - ~~Set up Supabase project~~
-  - ~~Create tables following defined schema (users, psychologists, availability, appointments, etc.)~~
-  - ~~Configure authentication for both patient and psychologist roles~~
-  - Implement row-level security policies
-  - ~~Create necessary indexes for query optimization~~
-  - ~~Test database relationships with sample data~~
+  - Set up PostgreSQL server instance
+  - Create database and user roles with appropriate permissions
+  - Create tables following defined schema (users, psychologists, availability, appointments, etc.)
+  - Implement custom authentication system for both patient and psychologist roles
+  - Create database-level security policies (or application-level alternatives)
+  - Create necessary indexes for query optimization
+  - Test database relationships with sample data
 
 ### Phase 2: Go Backend Development
 - **Objective**: Create robust API services for both interfaces
